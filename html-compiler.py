@@ -50,9 +50,9 @@ def js(output, path, attrs):
 # 	output.write(' />')
 
 
-def encode(attr, path, output, local_path):
+def encode(path, output, local_path, attr=True):
 	if attr:
-		output.write(' ' + attr + '="data:')
+		output.write('data:')
 	if not isfile(path) and path[0] != '/' and isfile(local_path + path):
 		# Prepend local path
 		path = local_path + path
@@ -60,21 +60,21 @@ def encode(attr, path, output, local_path):
 		print('Encoding local file:', path)
 		# Use local path
 		with open(path, 'r') as read:
-			output.write(extensions[path[path.rindex('.'):]] + ';base64,' + str(b64encode(read.read())) + '"')
+			output.write(extensions[path[path.rindex('.'):]] + ';base64,' + str(b64encode(read.read()), 'utf-8'))
 	else:
 		# Try remote path
 		print('Encoding remote file:', path)
-		output.write(extensions[path[path.rindex('.'):]] + ';base64,' + str(b64encode(urlopen(path).read())) + '"')
+		output.write(extensions[path[path.rindex('.'):]] + ';base64,' + str(b64encode(urlopen(path).read()), 'utf-8'))
 
 
-def style(_, styles, output, local_path):
+def style(styles, output, local_path):
 	styles = split('url\(', styles)
 	output.write(styles[0])
 	if len(styles) > 1:
 		for style in styles[1:]:
-			output.write('url(' + style[0])
-			encode(False, style[1:style.index(')') - 1], output, local_path)
-			output.write(style[0] + style[style.index(')'):])
+			output.write('url(data:')
+			encode(style[1:style.index(')') - 1], output, local_path, False)
+			output.write(style[style.index(')'):])
 
 
 handles = {
@@ -103,9 +103,12 @@ class Parser(HTMLParser):
 		else:
 			self.output.write('<' + tag)
 			for attr in attrs:
+				self.output.write(' ' + attr[0] + '="')
 				if attr[0] in handleAttribs:
-					handleAttribs[attr[0]](attr[0], attr[1], self.output, self.path)
-				self.output.write(' ' + attr[0] + '="' + ' '.join(attr[1:]) + '"')
+					handleAttribs[attr[0]](attr[1], self.output, self.path)
+				else:
+					self.output.write(' '.join(attr[1:]))
+				self.output.write('"')
 			self.output.write('>')
 
 	def handle_data(self, data):
