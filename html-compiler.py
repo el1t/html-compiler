@@ -9,10 +9,16 @@ from sys import argv
 
 class Parser(HTMLParser):
 	extensions = {
+		# Multipurpose
+		'.ogg' : 'application/ogg',
+		'.pdf' : 'application/pdf',
+		'.xml' : 'application/xml',
+		# Text
 		'.css' : 'text/css',
+		'.js'  : 'text/javascript',
+		# Images
 		'.jpg' : 'image/jpeg',
 		'.jpeg': 'image/jpeg',
-		'.js'  : 'text/javascript',
 		'.png' : 'image/png',
 		'.gif' : 'image/gif',
 		'.bmp' : 'image/bmp',
@@ -20,11 +26,15 @@ class Parser(HTMLParser):
 		# Audio
 		'.au'  : 'audio/basic',
 		'.flac': 'audio/flac',
-		'.mp4' : 'audio/mp4',
-		'.mpeg': 'audio/mpeg',
-		'.ogg' : 'audio/ogg',
-		'.opus': 'audio/opus'
-
+		'.m4a' : 'audio/mp4',
+		'.mpa': 'audio/mpeg',
+		'.opus': 'audio/opus',
+		# Video
+		'.avi' : 'video/avi',
+		'.m4v' : 'video/mp4',
+		'.mov' : 'video/quicktime',
+		'.mpv' : 'video/mpeg',
+		'.ogv' : 'video/ogg'
 	}
 	handles = {
 		'link'  : ['css', 'href'],
@@ -60,7 +70,7 @@ class Parser(HTMLParser):
 				elif attr[0].lower() == 'src':
 					source = attr[1]
 				else:
-					self.output.write(' ' + attr[0] + '="', ' '.join(attr[1:]), '"', sep='')
+					self.output.write(' ' + attr[0] + '="' + ' '.join(attr[1:]) + '"')
 			if source:
 				self.output.write(' src="data:')
 				self.encode(self.resolve_path(source), mime_extension)
@@ -130,11 +140,11 @@ class Parser(HTMLParser):
 
 def main():
 	file = argv[1]
-	index = file.rfind('/')
-	path = file[:index + 1] if index > -1 else './'
-	if not isfile(argv[1]):
+	if not isfile(file):
 		print('File not found')
 		return
+	index = file.rfind('/')
+	path = file[:index + 1] if index > -1 else './'
 	with open(path + 'output.html', 'w') as output:
 		p = Parser(path, output)
 		p.feed(open(file, 'r').read())
