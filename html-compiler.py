@@ -12,7 +12,6 @@ class Parser(HTMLParser):
 		super(Parser, self).__init__()
 		self.path = path
 		self.output = output
-		self.skip_next_end_tag = False
 		self.files = {
 			'css': [],
 			'js' : []
@@ -39,16 +38,13 @@ class Parser(HTMLParser):
 		self.output.write(data)
 
 	def handle_endtag(self, tag):
-		if not self.skip_next_end_tag:
-			# Output file queues at end of head and body
-			if tag.lower() == 'head':
-				self.output_css()
-				self.output_js()
-			elif tag.lower() == 'body':
-				self.output_js()
-			self.output.write('</' + tag + '>')
-		else:
-			self.skip_next_end_tag = False
+		# Output file queues at end of head and body
+		if tag.lower() == 'head':
+			self.output_css()
+			self.output_js()
+		elif tag.lower() == 'body':
+			self.output_js()
+		self.output.write('</' + tag + '>')
 
 	def handle_style(self, styles):
 		styles = split('url\(', styles)
