@@ -8,6 +8,29 @@ from sys import argv
 
 
 class Parser(HTMLParser):
+	extensions = {
+		'.css' : 'text/css',
+		'.jpg' : 'image/jpeg',
+		'.jpeg': 'image/jpeg',
+		'.js'  : 'text/javascript',
+		'.png' : 'image/png',
+		'.gif' : 'image/gif',
+		'.bmp' : 'image/bmp',
+		'.tif' : 'image/tiff',
+		# Audio
+		'.au'  : 'audio/basic',
+		'.flac': 'audio/flac',
+		'.mp4' : 'audio/mp4',
+		'.mpeg': 'audio/mpeg',
+		'.ogg' : 'audio/ogg',
+		'.opus': 'audio/opus'
+
+	}
+	handles = {
+		'link'  : ['css', 'href'],
+		'script': ['js',  'src']
+	}
+
 	def __init__(self, path, output):
 		super(Parser, self).__init__()
 		self.path = path
@@ -18,19 +41,29 @@ class Parser(HTMLParser):
 		}
 
 	def handle_starttag(self, tag, attrs):
-		if tag in self.handles:
+		if tag.lower() in self.handles:
+			file_type, attribute = self.handles[tag.lower()]
 			for attr in attrs:
-				if attr[0] == self.handles[tag][1]:
+				if attr[0].lower() == attribute:
 					# Queue up file for outputting later
-					self.files[self.handles[tag][0]].append(attr[1])
+					self.files[file_type].append(attr[1])
 		else:
+			mime_extension, source = None, None
 			self.output.write('<' + tag)
 			for attr in attrs:
-				self.output.write(' ' + attr[0] + '="')
-				if attr[0] in self.handleAttribs:
-					self.handleAttribs[attr[0]](self, attr[1])
+				if attr[0].lower() == 'style':
+					self.output.write(' ' + attr[0] + '="')
+					self.handle_style(attr[1])
+					self.output.write('"')
+				elif attr[0].lower() == 'type':
+					mime_extension = attr[1]
+				elif attr[0].lower() == 'src':
+					source = attr[1]
 				else:
-					self.output.write(' '.join(attr[1:]))
+					self.output.write(' ' + attr[0] + '="', ' '.join(attr[1:]), '"', sep='')
+			if source:
+				self.output.write(' src="data:')
+				self.encode(self.resolve_path(source), mime_extension)
 				self.output.write('"')
 			self.output.write('>')
 
@@ -53,11 +86,11 @@ class Parser(HTMLParser):
 			for style in styles[1:]:
 				self.output.write('url(data:')
 				print('Encoding file from', end=' ')
-				self.encode(self.resolve_path(style[1:style.index(')') - 1]), False)
+				self.encode(self.resolve_path(style[1:style.index(')') - 1]))
 				self.output.write(style[style.index(')'):])
 
 	def resolve_path(self, path):
-		extension = self.extensions[path[path.rindex('.'):]]
+		mime_extension = self.extensions[path[path.rindex('.'):]]
 		if not isfile(path) and path[0] != '/' and isfile(self.path + path):
 			# Prepend local path
 			path = self.path + path
@@ -65,10 +98,10 @@ class Parser(HTMLParser):
 		if isfile(path):
 			# Use local path
 			with open(path, 'r') as read:
-				return read.read(), extension
+				return read.read(), mime_extension
 		else:
 			# Try remote path
-			return urlopen(path).read(), extension
+			return urlopen(path).read(), mime_extension
 
 	def output_css(self):
 		self.output.write('<style>')
@@ -87,28 +120,12 @@ class Parser(HTMLParser):
 		# Clear file queue for scripts in body of html
 		self.files['js'] = []
 
-	def encode(self, file, attr=True):
-		contents, extension = file
-		if attr:
-			self.output.write('data:')
+	def encode(self, file, extension=None):
+		if extension:
+			contents = file[0]
+		else:
+			contents, extension = file
 		self.output.write(extension + ';base64,' + str(b64encode(contents), 'utf-8'))
-
-	# Static vars
-	handleAttribs = {
-		'src'  : encode,
-		'style': handle_style
-	}
-	extensions = {
-		'.css' : 'text/css',
-		'.jpg' : 'image/jpeg',
-		'.jpeg': 'image/jpeg',
-		'.js'  : 'text/javascript',
-		'.png' : 'image/png',
-		}
-	handles = {
-		'link'  : ['css', 'href'],
-		'script': ['js',  'src']
-	}
 
 
 def main():
