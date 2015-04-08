@@ -2,7 +2,8 @@ __author__ = 'El1t'
 from html.parser import HTMLParser
 from base64 import b64encode
 from urllib.request import urlopen
-from os.path import isdir, isfile
+from os.path import isfile, relpath, join, dirname, splitext
+from os import chdir, getcwd
 from re import split, match
 from sys import argv, exit
 from rjsmin import jsmin
@@ -51,9 +52,8 @@ class Parser(HTMLParser):
 		'm': False
 	}
 
-	def __init__(self, path, output, options=None):
+	def __init__(self, output, options=None):
 		super(Parser, self).__init__()
-		self.path = path
 		self.output = output
 		self.files = {
 			'css': [],
@@ -93,7 +93,12 @@ class Parser(HTMLParser):
 					self.output.write(' ' + attr[0] + '="' + ' '.join(attr[1:]) + '"')
 			if source:
 				self.output.write(' src="data:')
-				self.encode(self.resolve_path(source), mime_extension)
+				file, extension = self.resolve_path(source)
+				if not mime_extension:
+					mime_extension = extension
+				if self.options['v']:
+					print('Encoding', dirname(mime_extension), 'from', source)
+				self.encode(file, mime_extension)
 				self.output.write('"')
 			self.output.write('>')
 
@@ -119,18 +124,15 @@ class Parser(HTMLParser):
 		if len(styles) > 1:
 			for style in styles[1:]:
 				self.output.write('url(data:')
+				path = style[1:style.index(')') - 1]
+				file, extension = self.resolve_path(path)
 				if self.options['v']:
-					print('Encoding file from', end=' ')
-				self.encode(self.resolve_path(style[1:style.index(')') - 1]))
+					print('Encoding', dirname(extension), 'from', path)
+				self.encode(file, extension)
 				self.output.write(style[style.index(')'):])
 
 	def resolve_path(self, path):
-		mime_extension = self.extensions[path[path.rindex('.'):]]
-		if not isfile(path) and path[0] != '/' and isfile(self.path + path):
-			# Prepend local path
-			path = self.path + path
-		if self.options['v']:
-			print(path)
+		mime_extension = self.extensions[splitext(path)[1]]
 		if isfile(path):
 			# Use local path
 			with open(path, 'r') as read:
@@ -143,7 +145,7 @@ class Parser(HTMLParser):
 		self.output.write('<style>')
 		for file_path in self.files['css']:
 			if self.options['v']:
-				print('Inserting css file from', end=' ')
+				print('Inserting css from', file_path)
 			if self.options['m']:
 				self.output.write(cssmin(self.resolve_path(file_path)[0]))
 			else:
@@ -155,7 +157,7 @@ class Parser(HTMLParser):
 		self.output.write('<script type="text/javascript">')
 		for file_path in self.files['js']:
 			if self.options['v']:
-				print('Inserting javascript file from', end=' ')
+				print('Inserting javascript from', file_path)
 			if self.options['m']:
 				self.output.write(jsmin(self.resolve_path(file_path)[0]))
 			else:
@@ -165,20 +167,11 @@ class Parser(HTMLParser):
 		self.files['js'] = []
 
 	def encode(self, file, extension=None):
-		if extension:
-			contents = file[0]
-		else:
-			contents, extension = file
-		self.output.write(extension + ';base64,' + str(b64encode(contents), 'utf-8'))
+		self.output.write(extension + ';base64,' + str(b64encode(file), 'utf-8'))
 
 
 def display_help():
 	exit('Usage: html-compiler.py [-mv] file [output_file]')
-
-
-def find_path(file):
-	index = file.rfind('/')
-	return file[:index + 1] if index > -1 else './'
 
 
 def parse_args():
@@ -188,6 +181,7 @@ def parse_args():
 	}
 	options = Parser.default_options
 	input_file, input_path, output_file = None, None, None
+	initial_directory = getcwd()
 	for arg in argv[1:]:
 		if arg[0] == '-':
 			if arg[1:] in option_map:
@@ -199,20 +193,22 @@ def parse_args():
 					else:
 						display_help()
 		elif input_file:
-			output_file = arg
-			output_path = find_path(output_file)
+			# Output directory is relative to initial directory
+			# Find relative path from new directory (input_path)
+			output_file = relpath(join(initial_directory, arg), input_path)
 			if isfile(output_file):
 				overwrite = ''
 				while match('(y(es)?)|(no?)', overwrite):
 					overwrite = input('Overwrite ' + output_file + '?').lower()
 					if match('no?', overwrite):
-						output_file = output_path + 'output.html'
-			if len(output_file) < 5 or output_file[-5:] != '.html':
+						output_file = 'output.html'
+			if splitext(output_file)[1] != '.html':
 				output_file += '.html'
 		elif isfile(arg):
 			input_file = arg
-			input_path = find_path(input_file)
-			output_file = input_path + 'output.html'
+			input_path = dirname(input_file)
+			chdir(input_path)
+			output_file = 'output.html'
 		else:
 			print('File not found')
 			return
@@ -224,7 +220,7 @@ def parse_args():
 def main():
 	input_file, input_path, output_file, options = parse_args()
 	with open(output_file, 'w') as output:
-		p = Parser(input_path, output, options)
+		p = Parser(output, options)
 		p.feed(open(input_file, 'r').read())
 
 if __name__ == '__main__':
